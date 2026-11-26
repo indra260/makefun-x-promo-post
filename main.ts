@@ -1,26 +1,31 @@
-// A working post-x-promote-make-your-own-bounty-01 entry (Node 22, standard library only): it copies POST.json from the
-// repository root to /output/POST.json, where the gate reads it. That is all the program has to do. The entry is the
-// post itself: one post of your own on X that quotes make.fun's make-your-own-bounty post
-// (https://x.com/makefunai/status/2124915864336236646) or links to it, a photo of its own attached, make.fun or the
-// @makefunai tag and your play code in its text; POST.json names the post, and the house reads its replies, reposts and
-// quotes from X. Nothing this program writes about the post is scored.
-//
-// The POST.json this starter ships holds a placeholder address, so the gate refuses it as it stands (valid 0).
-// Replace it with your post's address before you submit.
-//
-// Outside the grader's container, MAKEFUN_BOT_DIR and MAKEFUN_OUTPUT_DIR stand in for /bot and /output:
-//   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
+// Entry program for the make.fun bounty "Promote make.fun's make-your-own-bounty post on X".
+// The X post itself is the entry; this program only hands its address to the house:
+// it reads POST.json at the repository root, checks the address really is an X post
+// address, and copies the file unchanged to /output/POST.json, where the gate reads it.
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
-const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const botDir = process.env.MAKEFUN_BOT_DIR ?? '/bot';
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const source = join(botDir, 'POST.json');
 
-mkdirSync(OUTPUT_DIR, { recursive: true });
+let parsed: unknown;
 try {
-  copyFileSync(join(BOT_DIR, 'POST.json'), join(OUTPUT_DIR, 'POST.json'));
+  parsed = JSON.parse(readFileSync(source, 'utf8'));
 } catch (err) {
-  console.error(`POST.json could not be copied from ${BOT_DIR}: ${(err as Error).message}`);
+  console.error(`POST.json is not readable JSON: ${(err as Error).message}`);
   process.exit(1);
 }
+
+const url = (parsed as { url?: unknown }).url;
+const postAddress = /^https:\/\/(x\.com|twitter\.com)\/[A-Za-z0-9_]+\/status\/\d+$/;
+if (typeof url !== 'string' || !postAddress.test(url)) {
+  console.error('POST.json must hold {"url": "https://x.com/<handle>/status/<id>"}');
+  process.exit(1);
+}
+
+mkdirSync(outputDir, { recursive: true });
+const target = join(outputDir, 'POST.json');
+copyFileSync(source, target);
+console.log(`handed in the post: ${url} (${statSync(target).size} bytes copied)`);
